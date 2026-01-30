@@ -1,4 +1,4 @@
-// matrix_mul_with_cublas.cu
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <cuda_runtime.h>
@@ -27,7 +27,7 @@
         }                                                                        \
     } while (0)
 
-// ---------------- CPU reference (only for small/medium N) ----------------
+// ---------------- CPU reference) ----------------
 void matrixMultiplyCPU(float *A, float *B, float *C, int N) {
     for (int i = 0; i < N; ++i)
         for (int j = 0; j < N; ++j) {
@@ -37,7 +37,7 @@ void matrixMultiplyCPU(float *A, float *B, float *C, int N) {
         }
 }
 
-// ---------------- Naive GPU kernel (for comparison) ----------------
+// ---------------- Naive GPU kernel  ----------------
 __global__ void matrixMultiplyNaive(float *A, float *B, float *C, int N) {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
@@ -80,7 +80,7 @@ __global__ void matrixMultiplyTiled(float *A, float *B, float *C, int N) {
     if (Row < N && Col < N) C[Row * N + Col] = Pvalue;
 }
 
-// ---------------- Benchmark (includes cuBLAS) ----------------
+// ----------------  (cuBLAS) ----------------
 void runBenchmark(int N, cublasHandle_t handle, int max_cpu_N) {
     size_t bytes = (size_t)N * N * sizeof(float);
 
@@ -111,7 +111,7 @@ void runBenchmark(int N, cublasHandle_t handle, int max_cpu_N) {
     dim3 threads(TILE_WIDTH, TILE_WIDTH);
     dim3 blocks((N + TILE_WIDTH - 1) / TILE_WIDTH, (N + TILE_WIDTH - 1) / TILE_WIDTH);
 
-    // 1) CPU time (skip for very large N if user wants)
+    // CPU time 
     double cpu_time = -1.0;
     if (N <= max_cpu_N) {
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -120,10 +120,13 @@ void runBenchmark(int N, cublasHandle_t handle, int max_cpu_N) {
         cpu_time = std::chrono::duration<double>(t1 - t0).count();
     }
 
-    // 2) Naive GPU timing (single launch)
+    // Naive GPU timing (single launch)
     cudaEvent_t s, e;
     CHECK_CUDA(cudaEventCreate(&s));
     CHECK_CUDA(cudaEventCreate(&e));
+
+
+
 
     CHECK_CUDA(cudaEventRecord(s));
     matrixMultiplyNaive<<<blocks, threads>>>(d_A, d_B, d_C, N);
@@ -132,7 +135,9 @@ void runBenchmark(int N, cublasHandle_t handle, int max_cpu_N) {
     float naive_ms = 0.0f;
     CHECK_CUDA(cudaEventElapsedTime(&naive_ms, s, e));
 
-    // 3) Tiled GPU timing (single launch)
+
+
+    // Tiled GPU timing
     CHECK_CUDA(cudaEventRecord(s));
     matrixMultiplyTiled<<<blocks, threads>>>(d_A, d_B, d_C, N);
     CHECK_CUDA(cudaEventRecord(e));
@@ -140,35 +145,19 @@ void runBenchmark(int N, cublasHandle_t handle, int max_cpu_N) {
     float tiled_ms = 0.0f;
     CHECK_CUDA(cudaEventElapsedTime(&tiled_ms, s, e));
 
-    // 4) cuBLAS timing (warmup + average of repeats)
-    // Note: our host arrays are row-major. cuBLAS expects column-major.
-    // Trick: call cublasSgemm with d_B, d_A (swapped) to compute A*B in row-major layout.
-    const float alpha = 1.0f;
+    // cuBLAS timing 
+	const float alpha = 1.0f;
     const float beta = 0.0f;
 
-    // warmup
-    CHECK_CUBLAS(cublasSgemm(handle,
-                CUBLAS_OP_N, CUBLAS_OP_N,
-                N, N, N,
-                &alpha,
-                d_B, N,
-                d_A, N,
-                &beta,
-                d_C, N));
+
+    CHECK_CUBLAS(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, N, N, &alpha, d_B, N, d_A, N, &beta, d_C, N));
     CHECK_CUDA(cudaDeviceSynchronize());
 
     int repeats = 3;
     float cublas_ms_total = 0.0f;
     for (int r = 0; r < repeats; ++r) {
         CHECK_CUDA(cudaEventRecord(s));
-        CHECK_CUBLAS(cublasSgemm(handle,
-                    CUBLAS_OP_N, CUBLAS_OP_N,
-                    N, N, N,
-                    &alpha,
-                    d_B, N,
-                    d_A, N,
-                    &beta,
-                    d_C, N));
+        CHECK_CUBLAS(cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, N, N, &alpha, d_B, N, d_A, N, &beta, d_C, N));
         CHECK_CUDA(cudaEventRecord(e));
         CHECK_CUDA(cudaEventSynchronize(e));
         float iter_ms = 0.0f;
@@ -177,19 +166,16 @@ void runBenchmark(int N, cublasHandle_t handle, int max_cpu_N) {
     }
     float cublas_ms = cublas_ms_total / repeats;
 
-    // Print CSV row
+    // Print CSV row ms to s
     double naive_s = naive_ms / 1000.0;
     double tiled_s = tiled_ms / 1000.0;
     double cublas_s = cublas_ms / 1000.0;
 
     if (cpu_time < 0) {
         // CPU skipped
-        printf("%d,NA,%.6f,%.6f,%.6f,NA,NA,NA\n",
-               N, naive_s, tiled_s, cublas_s);
+        printf("%d,NA,%.6f,%.6f,%.6f,NA,NA,NA\n", N, naive_s, tiled_s, cublas_s);
     } else {
-        printf("%d,%.6f,%.6f,%.6f,%.6f,%.2f,%.2f,%.2f\n",
-               N, cpu_time, naive_s, tiled_s, cublas_s,
-               cpu_time / naive_s, cpu_time / tiled_s, cpu_time / cublas_s);
+        printf("%d,%.6f,%.6f,%.6f,%.6f,%.2f,%.2f,%.2f\n", N, cpu_time, naive_s, tiled_s, cublas_s, cpu_time / naive_s, cpu_time / tiled_s, cpu_time / cublas_s);
     }
 
     // cleanup
@@ -203,9 +189,7 @@ void runBenchmark(int N, cublasHandle_t handle, int max_cpu_N) {
 
 int main(int argc, char** argv) {
     CHECK_CUDA(cudaFree(0));
-    // You can change max_cpu_N to limit CPU runs (CPU O(N^3) can be very slow)
-    int max_cpu_N = 1024; // set to 4096 only if you want the CPU to run for that size
-
+    int max_cpu_N = 1024; 
     printf("N,CPU(s),Naive_GPU(s),Tiled_GPU(s),cuBLAS_GPU(s),Speedup_Naive,Speedup_Tiled,Speedup_cuBLAS\n");
 
     int sizes[] = {256, 512, 1024, 2048};

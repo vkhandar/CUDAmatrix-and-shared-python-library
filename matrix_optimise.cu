@@ -125,7 +125,7 @@ void runBenchmark(int N) {
     cudaFree(d_A); cudaFree(d_B); cudaFree(d_C);
 }
 
-// ------------------- Main -------------------
+
 int main() {
     // CSV Header
     printf("N,CPU(s),Naive_GPU(s),Tiled_GPU(s),Speedup_Naive,Speedup_Tiled\n");
